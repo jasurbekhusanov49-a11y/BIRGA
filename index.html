@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10213b">
+<title>BIRGA — yordamchi</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5fa;color:#17243a}
+header{background:#10213b;color:white;padding:24px 18px}
+header h1{margin:0 0 7px}
+header p{margin:0;color:#cbd7e8}
+main{max-width:760px;margin:auto;padding:18px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+button{cursor:pointer;border:0;border-radius:10px;padding:12px;background:#e0e9f7;color:#163254;font-weight:bold}
+button.active,.primary{background:#1769e0;color:white}
+.card{background:white;padding:18px;border-radius:16px;margin-bottom:14px;box-shadow:0 3px 15px #17243a0b}
+h2{margin-top:0;font-size:20px}
+input,textarea{width:100%;padding:12px;margin:6px 0 12px;border:1px solid #ccd5e3;border-radius:9px;font:inherit}
+textarea{min-height:100px;resize:vertical}
+.wide{width:100%}
+.item{padding:10px 0;border-bottom:1px solid #e8edf4;overflow-wrap:anywhere}
+.small{color:#65748a;font-size:14px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>✦ BIRGA</h1>
+  <p>Kundalik hayoting uchun bepul yordamchi</p>
+</header>
+<main>
+  <nav>
+    <button class="active" data-page="home">Bosh sahifa</button>
+    <button data-page="money">Pul daftari</button>
+    <button data-page="notes">Eslatmalar</button>
+    <button data-page="calc">Hisoblagich</button>
+  </nav>
+
+  <section id="home" class="page">
+    <div class="card">
+      <h2>Salom! 👋</h2>
+      <p>BIRGA ilovasiga xush kelibsiz.</p>
+      <p>Bu yerda xarajatlaringizni yozing, eslatmalar saqlang va hisob-kitob qiling.</p>
+      <p class="small">Ma’lumotlaringiz ushbu brauzerda saqlanadi.</p>
+    </div>
+    <div class="card">
+      <h2>Bugungi eslatma</h2>
+      <p id="today"></p>
+      <button class="primary" onclick="showPage('notes')">Eslatma yozish</button>
+    </div>
+  </section>
+
+  <section id="money" class="page" hidden>
+    <div class="card">
+      <h2>Pul daftari</h2>
+      <p>Jami balans: <strong id="balance">0 so‘m</strong></p>
+      <label>Harakat turi</label>
+      <select id="kind" style="width:100%;padding:12px;margin:6px 0 12px">
+        <option value="in">Daromad</option>
+        <option value="out">Xarajat</option>
+      </select>
+      <label>Summa (so‘m)</label>
+      <input id="amount" type="number" min="1" placeholder="Masalan, 25000">
+      <label>Izoh</label>
+      <input id="desc" placeholder="Masalan, oziq-ovqat">
+      <button class="primary wide" onclick="addMoney()">Saqlash</button>
+    </div>
+    <div class="card">
+      <h2>Tarix</h2>
+      <div id="history"></div>
+      <button onclick="clearMoney()">Pul tarixini tozalash</button>
+    </div>
+  </section>
+
+  <section id="notes" class="page" hidden>
+    <div class="card">
+      <h2>Eslatmalar</h2>
+      <textarea id="noteText" placeholder="Kerakli ma’lumotni yozing..."></textarea>
+      <button class="primary" onclick="addNote()">Eslatmani saqlash</button>
+    </div>
+    <div class="card">
+      <h2>Saqlangan eslatmalar</h2>
+      <div id="noteList"></div>
+    </div>
+  </section>
+
+  <section id="calc" class="page" hidden>
+    <div class="card">
+      <h2>Hisoblagich</h2>
+      <p class="small">Oddiy matematik hisob-kitoblar</p>
+      <input id="expression" placeholder="Masalan: (25000+15000)*2">
+      <button class="primary wide" onclick="calculate()">Hisoblash</button>
+      <h2 id="result">Natija: —</h2>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const read = (key, fallback) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v ?? fallback;
+  } catch { return fallback; }
+};
+let money = read("birga-money", []);
+let notes = read("birga-notes", []);
+
+function save(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch {
+    alert("Saqlash amalga oshmadi. Brauzer xotirasini tekshiring.");
+    return false;
+  }
+}
+
+function showPage(page) {
+  document.querySelectorAll(".page").forEach(p => p.hidden = p.id !== page);
+  document.querySelectorAll("nav button").forEach(b =>
+    b.classList.toggle("active", b.dataset.page === page));
+}
+document.querySelectorAll("nav button").forEach(b =>
+  b.addEventListener("click", () => showPage(b.dataset.page)));
+
+function addMoney() {
+  const amount = Number($("amount").value);
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    alert("To‘g‘ri summani kiriting."); return;
+  }
+  money.unshift({
+    amount, kind: $("kind").value,
+    desc: $("desc").value.trim() || "Izohsiz",
+    date: new Date().toLocaleDateString("uz-UZ")
+  });
+  if (save("birga-money", money)) {
+    $("amount").value = ""; $("desc").value = "";
+    renderMoney();
+  } else money.shift();
+}
+
+function renderMoney() {
+  const balance = money.reduce((s, m) =>
+    s + (m.kind === "in" ? m.amount : -m.amount), 0);
+  $("balance").textContent = balance.toLocaleString("uz-UZ") + " so‘m";
+  $("history").replaceChildren();
+  money.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.textContent = `${m.kind === "in" ? "+" : "−"}${m.amount.toLocaleString("uz-UZ")} so‘m · ${m.desc} · ${m.date}`;
+    $("history").append(div);
+  });
+}
+
+function clearMoney() {
+  if (confirm("Barcha pul tarixini o‘chirasizmi?")) {
+    const old = money;
+    money = [];
+    if (!save("birga-money", money)) money = old;
+    renderMoney();
+  }
+}
+
+function addNote() {
+  const text = $("noteText").value.trim();
+  if (!text) { alert("Avval eslatma yozing."); return; }
+  notes.unshift({text, date: new Date().toLocaleString("uz-UZ")});
+  if (save("birga-notes", notes)) $("noteText").value = "";
+  else notes.shift();
+  renderNotes();
+}
+
+function renderNotes() {
+  $("noteList").replaceChildren();
+  notes.forEach((n, i) => {
+    const div = document.createElement("div");
+    div.className = "item";
+    const p = document.createElement("p");
+    p.textContent = n.text;
+    const small = document.createElement("p");
+    small.className = "small";
+    small.textContent = n.date;
+    const btn = document.createElement("button");
+    btn.textContent = "O‘chirish";
+    btn.onclick = () => {
+      const old = notes;
+      notes = notes.filter((_, j) => j !== i);
+      if (!save("birga-notes", notes)) notes = old;
+      renderNotes();
+    };
+    div.append(p, small, btn);
+    $("noteList").append(div);
+  });
+}
+
+function calculate() {
+  const s = $("expression").value.trim();
+  if (!s || !/^[0-9+\-*/().%\s]+$/.test(s)) {
+    $("result").textContent = "Faqat matematik ifoda kiriting.";
+    return;
+  }
+  try {
+    const result = Function('"use strict";return (' + s + ')')();
+    $("result").textContent =
+      Number.isFinite(result) ? "Natija: " + result : "Hisoblab bo‘lmadi.";
+  } catch {
+    $("result").textContent = "Ifodani tekshirib qayta kiriting.";
+  }
+}
+
+$("today").textContent = new Date().toLocaleDateString("uz-UZ", {
+  weekday:"long", year:"numeric", month:"long", day:"numeric"
+});
+renderMoney();
+renderNotes();
+</script>
+</body>
+</html>
